@@ -4,9 +4,11 @@ import org.apache.commons.io.FileUtils;
 import org.objectweb.asm.ClassReader;
 
 import java.io.*;
+import java.nio.file.Files;
 import java.util.Enumeration;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.jar.JarOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -17,23 +19,27 @@ public class Recovery {
             return;
         }
         File temp=new File("temp");
+        File out=new File("out");
         temp.mkdir();
+        out.mkdir();
         unzipJar("temp",args[0]);
         for (File file : FileUtils.listFiles(temp, null, true)) {
             if(file.getName().endsWith("class")){
                 System.out.println("Loading..."+file.getName());
                 String newName=new ClassReader(new FileInputStream(file)).getClassName();
                 System.out.println("Mapping: "+file.getName()+" to "+newName+".class");
-                file.renameTo(new File(file.getParent()+"/"+newName+".class"));
+                File destin=new File(out+"/"+newName+".class");
+                destin.getParentFile().mkdirs();
+                Files.move(file.toPath(),destin.toPath());
             }else{
                 System.out.println("Skip..."+file.getName());
             }
         }
         FileOutputStream fos = new FileOutputStream("output.jar");
-        ZipOutputStream zipOut = new ZipOutputStream(fos);
+        JarOutputStream jarOut=new JarOutputStream(fos);
         System.out.println("Compressing....output.jar");
-        zipFile(temp, ".", zipOut);
-        zipOut.close();
+        zipFile(out, ".", jarOut);
+        jarOut.close();
         fos.close();
         FileUtils.deleteDirectory(temp);
 
@@ -77,31 +83,31 @@ public class Recovery {
             }
         }
     }
-    private static void zipFile(File fileToZip, String fileName, ZipOutputStream zipOut) throws IOException {
+    private static void zipFile(File fileToZip, String fileName, JarOutputStream jarOut) throws IOException {
         if (fileToZip.isHidden()) {
             return;
         }
         if (fileToZip.isDirectory()) {
             if (fileName.endsWith("/")) {
-                zipOut.putNextEntry(new ZipEntry(fileName));
-                zipOut.closeEntry();
+                jarOut.putNextEntry(new ZipEntry(fileName));
+                jarOut.closeEntry();
             } else {
-                zipOut.putNextEntry(new ZipEntry(fileName + "/"));
-                zipOut.closeEntry();
+                jarOut.putNextEntry(new ZipEntry(fileName + "/"));
+                jarOut.closeEntry();
             }
             File[] children = fileToZip.listFiles();
             for (File childFile : children) {
-                zipFile(childFile, fileName + "/" + childFile.getName(), zipOut);
+                zipFile(childFile, fileName + "/" + childFile.getName(), jarOut);
             }
             return;
         }
         FileInputStream fis = new FileInputStream(fileToZip);
-        ZipEntry zipEntry = new ZipEntry(fileName);
-        zipOut.putNextEntry(zipEntry);
+        JarEntry zipEntry = new JarEntry(fileName);
+        jarOut.putNextEntry(zipEntry);
         byte[] bytes = new byte[1024];
         int length;
         while ((length = fis.read(bytes)) >= 0) {
-            zipOut.write(bytes, 0, length);
+            jarOut.write(bytes, 0, length);
         }
         fis.close();
     }
